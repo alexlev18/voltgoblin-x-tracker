@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Edmonton Micromobility Tracker</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    body { font-family: sans-serif; margin: 0; padding: 0; }
+    #map { height: 80vh; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 4px 6px; border: 1px solid #ccc; }
+    tr.low-battery { background: #ffe0e0; }
+  </style>
+</head>
+<body>
+<h1>Edmonton Micromobility Tracker</h1>
+<div id="map"></div>
+<table id="list">
+  <thead>
+    <tr><th>Company</th><th>Type</th><th>Battery</th><th>Status</th><th>Last Updated</th></tr>
+  </thead>
+  <tbody></tbody>
+</table>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+var map = L.map('map').setView([53.5461, -113.4938], 13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+var markers = {};
+function update() {
+  fetch('/api/latest').then(r => r.json()).then(data => {
+    var tbody = document.querySelector('#list tbody');
+    tbody.innerHTML = '';
+    var seen = {};
+    data.forEach(d => {
+      var id = d.company + ':' + d.last_updated;
+      seen[id] = true;
+      var marker = markers[id];
+      if(!marker) {
+        marker = L.marker([d.lat, d.lon]).addTo(map);
+        markers[id] = marker;
+      } else {
+        marker.setLatLng([d.lat, d.lon]);
+      }
+      marker.bindPopup(d.company + ' ' + d.vehicle_type + ' ' + (d.battery_level || '') + '%');
+      var row = document.createElement('tr');
+      if(d.battery_level !== null && d.battery_level < 20) row.className = 'low-battery';
+      row.innerHTML = '<td>' + d.company + '</td><td>' + d.vehicle_type + '</td><td>' + (d.battery_level || '') + '</td><td>' + d.status + '</td><td>' + d.last_updated + '</td>';
+      tbody.appendChild(row);
+    });
+    Object.keys(markers).forEach(id => {
+      if(!seen[id]) { map.removeLayer(markers[id]); delete markers[id]; }
+    });
+  }).catch(err => console.error(err));
+}
+update();
+setInterval(update, 60000);
+</script>
+</body>
+</html>
